@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG Chatbot — Test UI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 720px;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 1rem;
+      font-weight: 500;
+      color: #888;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 8px 0;
+    }
+
+    .msg {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      line-height: 1.5;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: #1a6cf6;
+      color: #fff;
+      border-bottom-right-radius: 3px;
+    }
+    .msg.assistant {
+      align-self: flex-start;
+      background: #1e1e1e;
+      border: 1px solid #2a2a2a;
+      border-bottom-left-radius: 3px;
+    }
+
+    .rating-row {
+      align-self: flex-start;
+      display: flex;
+      gap: 6px;
+      margin-top: 2px;
+    }
+    .rating-btn {
+      background: none;
+      border: 1px solid #333;
+      color: #888;
+      border-radius: 6px;
+      padding: 2px 10px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: background 0.15s, color 0.15s;
+    }
+    .rating-btn:hover { background: #2a2a2a; color: #e0e0e0; }
+    .rating-btn.selected { background: #1a6cf6; border-color: #1a6cf6; color: #fff; }
+
+    #typing {
+      align-self: flex-start;
+      padding: 10px 14px;
+      background: #1e1e1e;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      border-bottom-left-radius: 3px;
+      font-size: 0.85rem;
+      color: #555;
+      display: none;
+    }
+
+    #input-row {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    #input {
+      flex: 1;
+      background: #1e1e1e;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      color: #e0e0e0;
+      padding: 10px 14px;
+      font-size: 0.9rem;
+      resize: none;
+      outline: none;
+      font-family: inherit;
+      min-height: 44px;
+      max-height: 140px;
+    }
+    #input:focus { border-color: #1a6cf6; }
+    #input::placeholder { color: #444; }
+
+    #send {
+      background: #1a6cf6;
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      padding: 0 18px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 500;
+      transition: background 0.15s;
+    }
+    #send:hover { background: #1558d0; }
+    #send:disabled { background: #333; cursor: not-allowed; }
+
+    #error-banner {
+      display: none;
+      background: #3b1515;
+      border: 1px solid #6b2020;
+      color: #f87171;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <h1>RAG Chatbot — Test UI</h1>
+  <div id="chat"></div>
+  <div id="typing">Thinking…</div>
+  <div id="error-banner"></div>
+  <div id="input-row">
+    <textarea id="input" placeholder="Ask about Avyakt's background…" rows="1"></textarea>
+    <button id="send">Send</button>
+  </div>
+</div>
+
+<script>
+  const chatEl    = document.getElementById('chat');
+  const inputEl   = document.getElementById('input');
+  const sendBtn   = document.getElementById('send');
+  const typingEl  = document.getElementById('typing');
+  const errorEl   = document.getElementById('error-banner');
+
+  // Conversation history sent with each request (stateless backend).
+  const history = [];
+
+  // Auto-resize textarea
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
+  });
+
+  // Send on Enter (Shift+Enter for newline)
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  sendBtn.addEventListener('click', sendMessage);
+
+  function appendMessage(role, text) {
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    div.textContent = text;
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    return div;
+  }
+
+  function appendRatingRow(interactionId) {
+    const row = document.createElement('div');
+    row.className = 'rating-row';
+
+    const up   = document.createElement('button');
+    up.className = 'rating-btn';
+    up.textContent = '👍';
+
+    const down = document.createElement('button');
+    down.className = 'rating-btn';
+    down.textContent = '👎';
+
+    const submit = async (rating, btn, other) => {
+      if (btn.classList.contains('selected')) return;
+      try {
+        await fetch('/rating', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ interaction_id: interactionId, rating }),
+        });
+        btn.classList.add('selected');
+        other.disabled = true;
+      } catch (_) { /* silent */ }
+    };
+
+    up.addEventListener('click',   () => submit(5, up,   down));
+    down.addEventListener('click', () => submit(1, down, up));
+
+    row.appendChild(up);
+    row.appendChild(down);
+    chatEl.appendChild(row);
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function showError(msg) {
+    errorEl.textContent = msg;
+    errorEl.style.display = 'block';
+    setTimeout(() => { errorEl.style.display = 'none'; }, 5000);
+  }
+
+  async function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text || sendBtn.disabled) return;
+
+    errorEl.style.display = 'none';
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+    sendBtn.disabled = true;
+    typingEl.style.display = 'block';
+
+    appendMessage('user', text);
+
+    // Pass last 5 history turns with the request (client-side memory).
+    const payload = { message: text, history: history.slice(-5) };
+
+    let assistantDiv = null;
+    let fullText     = '';
+    let interactionId = '';
+
+    try {
+      const resp = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${resp.status}`);
+      }
+
+      const reader  = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let   buffer  = '';
+
+      typingEl.style.display = 'none';
+      assistantDiv = appendMessage('assistant', '');
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep any incomplete line
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let event;
+          try { event = JSON.parse(line.slice(6)); } catch (_) { continue; }
+
+          if (event.error) {
+            showError(event.error);
+            break;
+          }
+          if (event.token) {
+            fullText += event.token;
+            assistantDiv.textContent = fullText;
+            chatEl.scrollTop = chatEl.scrollHeight;
+          }
+          if (event.done) {
+            interactionId = event.id || '';
+          }
+        }
+      }
+    } catch (err) {
+      typingEl.style.display = 'none';
+      showError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+
+    if (fullText) {
+      // Add to history for next turn.
+      history.push({ role: 'user',      content: text });
+      history.push({ role: 'assistant', content: fullText });
+
+      // Show rating buttons if we have an interaction ID.
+      if (interactionId) appendRatingRow(interactionId);
+    }
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+# Secrets
+.env
+*.env
+
+# Build output
+bin/
+/server
+
+# Go
+vendor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

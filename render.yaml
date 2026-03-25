@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: rag-chatbot
+    runtime: go
+    buildCommand: go build -o server ./cmd/server
+    startCommand: ./server
+    healthCheckPath: /health
+    envVars:
+      - key: NEON_DATABASE_URL
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: PORT
+        value: "8080"
+      - key: SIMILARITY_THRESHOLD
+        value: "0.75"

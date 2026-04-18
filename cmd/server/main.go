@@ -26,7 +26,7 @@ func main() {
 	// --- Config ---
 	databaseURL := mustEnv("NEON_DATABASE_URL")
 	voyageAPIKey := mustEnv("VOYAGE_API_KEY")
-	llmProvider := envOr("LLM_PROVIDER", "gemini")
+	llmProvider := envOr("LLM_PROVIDER", "groq")
 	geminiAPIKey := os.Getenv("GEMINI_API_KEY")
 	groqAPIKey := os.Getenv("GROQ_API_KEY")
 	allowedOrigins := envOr("ALLOWED_ORIGINS", "http://localhost:3000")

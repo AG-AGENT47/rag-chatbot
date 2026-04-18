@@ -88,12 +88,8 @@ func (p *Pipeline) Run(ctx context.Context, currentMsg string, history []llm.Mes
 		return &Result{IsFiltered: true, FilterMsg: msg}, nil
 	}
 
-	// Step 5: Build system prompt from retrieved chunks.
-	var contextBuilder strings.Builder
-	for i, chunk := range chunks {
-		fmt.Fprintf(&contextBuilder, "[%d] %s\n\n", i+1, chunk.Content)
-	}
-	systemPrompt := fmt.Sprintf(systemPromptTemplate, contextBuilder.String())
+	// Step 5: Build system prompt from full resume (stopgap until RAG pipeline is tuned).
+	systemPrompt := fmt.Sprintf(systemPromptTemplate, FullResume)
 
 	// Step 6: Start the LLM stream.
 	tokenCh, err := p.llm.Stream(ctx, systemPrompt, history, currentMsg)

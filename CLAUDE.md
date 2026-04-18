@@ -25,8 +25,8 @@ make run               # starts on :8080, serves frontend/index.html at /
 ## External Dependencies
 - **Neon PostgreSQL** (portfolio-store) — pgvector cosine search on `knowledge_base`
 - **Voyage AI** `voyage-3-lite` — MUST match the model that built the stored embeddings
-- **Gemini 2.5 Flash** — default LLM (1500 free req/day at aistudio.google.com)
-- **Groq Llama 3.3 70B** — fallback LLM (set `LLM_PROVIDER=groq`)
+- **Groq Llama 3.3 70B** — default LLM (1,000 free req/day at console.groq.com)
+- **Gemini** — fallback LLM (set `LLM_PROVIDER=gemini`)
 
 ## Deployment
 Render free tier — `render.yaml` in repo root. Push to GitHub → auto-deploy.

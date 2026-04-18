@@ -2,6 +2,9 @@
 .env
 *.env
 
+# Resume source file (content lives in internal/rag/resume.go)
+data/
+
 # Build output
 bin/
 /server

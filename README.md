@@ -8,7 +8,7 @@ Go-based RAG (Retrieval-Augmented Generation) service for [Avyakt Garg's portfol
 portfolio-website  →  rag-chatbot (you are here)  →  portfolio-store
 ```
 
-Answers recruiter and visitor questions about Avyakt's background by retrieving semantically relevant chunks from a Neon PostgreSQL knowledge base (pgvector) and streaming responses via Gemini 2.5 Flash over SSE.
+Answers recruiter and visitor questions about Avyakt's background by retrieving semantically relevant chunks from a Neon PostgreSQL knowledge base (pgvector) and streaming responses via Groq Llama 3.3 70B over SSE.
 
 ---
 
@@ -54,7 +54,7 @@ POST /chat
   ├─ Voyage AI           — embed with voyage-3-lite (512 dims)
   ├─ pgvector            — cosine search → top 5 chunks
   ├─ Topic Filter        — cosine distance > 0.75 → redirect (no LLM call)
-  ├─ Gemini 2.5 Flash    — stream response via SSE
+  ├─ Groq Llama 3.3 70B  — stream response via SSE
   └─ Neon DB             — log interaction for metrics
 ```
 
@@ -74,8 +74,8 @@ rag-chatbot/
 │   │   └── guardrails.go       # Input validation + injection detection
 │   ├── llm/
 │   │   ├── llm.go              # LLM interface (StreamEvent channel)
-│   │   ├── gemini.go           # Gemini 2.5 Flash provider
-│   │   └── groq.go             # Groq Llama 3.3 70B provider
+│   │   ├── gemini.go           # Gemini provider (fallback)
+│   │   └── groq.go             # Groq Llama 3.3 70B provider (default)
 │   └── rag/
 │       ├── embedder.go         # Voyage AI voyage-3-lite embeddings
 │       ├── retriever.go        # pgvector cosine search
@@ -94,8 +94,8 @@ rag-chatbot/
 - **Go 1.21** + **chi** router
 - **pgx/v5** + **pgvector-go** — Neon PostgreSQL with pgvector extension
 - **Voyage AI** `voyage-3-lite` — 512-dim query embeddings
-- **Gemini 2.5 Flash** (default) — 1500 free req/day via AI Studio
-- **Groq Llama 3.3 70B** (fallback) — swap with `LLM_PROVIDER=groq`
+- **Groq Llama 3.3 70B** (default) — 1,000 free req/day
+- **Gemini** (fallback) — swap with `LLM_PROVIDER=gemini`
 - **Render** — free tier deployment via `render.yaml`
 
 ---
@@ -137,8 +137,8 @@ make run
 Switch providers with zero code changes via the `LLM_PROVIDER` env var:
 
 ```bash
-LLM_PROVIDER=gemini make run   # Gemini 2.5 Flash (default)
-LLM_PROVIDER=groq   make run   # Groq Llama 3.3 70B
+LLM_PROVIDER=groq   make run   # Groq Llama 3.3 70B (default)
+LLM_PROVIDER=gemini make run   # Gemini (fallback)
 ```
 
 The `LLM` interface in `internal/llm/llm.go` makes adding new providers straightforward.
@@ -155,7 +155,8 @@ Required env vars in the Render dashboard:
 |---|---|
 | `NEON_DATABASE_URL` | Neon PostgreSQL connection string |
 | `VOYAGE_API_KEY` | Voyage AI API key |
-| `GEMINI_API_KEY` | Google AI Studio key |
+| `GROQ_API_KEY` | Groq API key |
+| `GEMINI_API_KEY` | Google AI Studio key (optional fallback) |
 | `ALLOWED_ORIGINS` | Your portfolio website URL (CORS) |
 
 Push to `main` → auto-deploy. Health check at `GET /health`.

@@ -1,14 +1,12 @@
 # rag-chatbot
 
-> **Work in Progress** — core RAG pipeline is functional and deployed; advanced retrieval methods (HyDE and others) are actively being integrated.
-
 Go-based RAG (Retrieval-Augmented Generation) service for [Avyakt Garg's portfolio](https://github.com/AG-AGENT47). Part 2 of a 3-repo system:
 
 ```
 portfolio-website  →  rag-chatbot (you are here)  →  portfolio-store
 ```
 
-Answers recruiter and visitor questions about Avyakt's background by retrieving semantically relevant chunks from a Neon PostgreSQL knowledge base (pgvector) and streaming responses via Groq Llama 3.3 70B over SSE.
+Answers recruiter and visitor questions about Avyakt's background by retrieving semantically relevant chunks from a Neon PostgreSQL knowledge base and streaming responses via Groq Llama 3.3 70B over SSE.
 
 ---
 
@@ -16,30 +14,20 @@ Answers recruiter and visitor questions about Avyakt's background by retrieving 
 
 | Feature | Status |
 |---|---|
-| Core RAG pipeline (embed → retrieve → generate) | Done |
+| Hybrid retrieval (vector + full-text search, RRF merge) | Done |
 | SSE streaming responses | Done |
 | Guardrails (injection detection, length limits) | Done |
 | Topic filter (off-topic redirect without LLM call) | Done |
 | Query contextualization (pronoun resolution) | Done |
+| Metadata-grounded context (company, role, date per chunk) | Done |
+| Rate limit error signalling (`rate_limited` SSE field) | Done |
 | LLM provider switching (Gemini / Groq) | Done |
 | Interaction logging + ratings | Done |
 | Metrics endpoint | Done |
 | Render deployment | Done |
-| **HyDE** (Hypothetical Document Embeddings) | In Progress |
+| Embedding cache (absorb Voyage 3 RPM bursts) | Planned |
 | Re-ranking retrieved chunks | Planned |
 | Conversation memory compression | Planned |
-
----
-
-## What is HyDE?
-
-**HyDE (Hypothetical Document Embeddings)** is an advanced retrieval technique that improves semantic search quality:
-
-1. Instead of embedding the raw user query, the LLM first generates a *hypothetical answer* to the query
-2. That hypothetical answer is embedded — it sits closer in vector space to real answers than the raw question does
-3. The embedding of the hypothetical answer is used to retrieve chunks from the knowledge base
-
-This dramatically improves retrieval recall for questions phrased very differently from how the knowledge base documents are written (e.g. "tell me about his projects" vs a stored chunk that begins "Avyakt built...").
 
 ---
 
@@ -49,14 +37,17 @@ This dramatically improves retrieval recall for questions phrased very different
 POST /chat
   │
   ├─ Guardrails          — length check + injection pattern detection
-  ├─ Query Context       — prepend last user message (pronoun resolution)
-  ├─ [HyDE - WIP]        — generate hypothetical answer, embed that instead
-  ├─ Voyage AI           — embed with voyage-3-lite (512 dims)
-  ├─ pgvector            — cosine search → top 5 chunks
-  ├─ Topic Filter        — cosine distance > 0.75 → redirect (no LLM call)
+  ├─ Query contextualization — prepend last user message (pronoun resolution)
+  ├─ Voyage AI           — embed with voyage-3-lite
+  ├─ Hybrid search       — vector (pgvector cosine) + full-text (tsvector/tsquery)
+  │                         merged via Reciprocal Rank Fusion → top 5 chunks
+  ├─ Topic filter        — cosine distance > 0.80 → redirect (no LLM call)
+  ├─ Context builder     — format chunks with metadata headers (company/role/date)
   ├─ Groq Llama 3.3 70B  — stream response via SSE
   └─ Neon DB             — log interaction for metrics
 ```
+
+---
 
 ## Project Layout
 
@@ -66,8 +57,8 @@ rag-chatbot/
 ├── internal/
 │   ├── api/
 │   │   ├── handlers.go         # /chat, /rating, /metrics, /health
-│   │   ├── middleware.go       # CORS, rate limiting
-│   │   └── models.go           # Request/response types
+│   │   ├── middleware.go       # CORS, IP rate limiting
+│   │   └── models.go           # Request/response types (incl. ssePayload)
 │   ├── db/
 │   │   └── db.go               # Neon PostgreSQL pool + queries
 │   ├── guardrails/
@@ -77,11 +68,11 @@ rag-chatbot/
 │   │   ├── gemini.go           # Gemini provider (fallback)
 │   │   └── groq.go             # Groq Llama 3.3 70B provider (default)
 │   └── rag/
-│       ├── embedder.go         # Voyage AI voyage-3-lite embeddings
-│       ├── retriever.go        # pgvector cosine search
-│       └── pipeline.go         # Full RAG pipeline orchestration
+│       ├── embedder.go         # Voyage AI embeddings + ErrRateLimit type
+│       ├── retriever.go        # HybridTopK: vector + FTS + RRF merge
+│       └── pipeline.go         # RAG pipeline orchestration + buildContext
 ├── frontend/
-│   └── index.html              # Chat UI (served at /)
+│   └── index.html              # Test chat UI (served at /)
 ├── render.yaml                 # Render deployment config
 ├── Makefile
 └── .env.example
@@ -92,10 +83,10 @@ rag-chatbot/
 ## Stack
 
 - **Go 1.21** + **chi** router
-- **pgx/v5** + **pgvector-go** — Neon PostgreSQL with pgvector extension
-- **Voyage AI** `voyage-3-lite` — 512-dim query embeddings
-- **Groq Llama 3.3 70B** (default) — 1,000 free req/day
-- **Gemini** (fallback) — swap with `LLM_PROVIDER=gemini`
+- **pgx/v5** + **pgvector-go** — Neon PostgreSQL with pgvector + full-text search
+- **Voyage AI** `voyage-3-lite` — query embeddings
+- **Groq Llama 3.3 70B** (default) — 1,000 free req/day, 12K TPM
+- **Gemini 1.5 Flash** (fallback) — swap with `LLM_PROVIDER=gemini`
 - **Render** — free tier deployment via `render.yaml`
 
 ---
@@ -109,7 +100,7 @@ cd rag-chatbot
 
 # 2. Set up secrets
 cp .env.example .env
-# Fill in: NEON_DATABASE_URL, VOYAGE_API_KEY, GEMINI_API_KEY, ALLOWED_ORIGINS
+# Fill in: NEON_DATABASE_URL, VOYAGE_API_KEY, GROQ_API_KEY, ALLOWED_ORIGINS
 
 # 3. Install dependencies
 make deps
@@ -125,23 +116,47 @@ make run
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/chat` | SSE stream — body: `{message, history[]}` |
-| `POST` | `/rating` | Submit rating — body: `{interaction_id, rating}` (1 or 5) |
-| `GET` | `/metrics` | `{total_conversations, avg_rating, recent_questions}` |
+| `POST` | `/chat` | SSE stream — body: `{"message": "...", "history": []}` |
+| `POST` | `/rating` | Submit rating — body: `{"interaction_id": "...", "rating": 1\|5}` |
+| `GET` | `/metrics` | `{"total_conversations", "avg_rating", "recent_questions"}` |
 | `GET` | `/health` | `{"status":"ok"}` — Render health check |
+
+### SSE event types (`POST /chat`)
+
+Each event is `data: <json>\n\n`. Possible shapes:
+
+```json
+{"token": "..."}                          // streaming token
+{"done": true, "id": "<interaction-id>"}  // stream complete, use id for /rating
+{"error": "..."}                          // infrastructure failure
+{"error": "rate_limited", "rate_limited": true}  // Voyage AI 429 — retry after ~20s
+```
+
+Check `event.rate_limited === true` on the client to show a retry prompt instead of a generic error.
+
+---
+
+## Rate Limits (free tier)
+
+| Service | Limit | Impact |
+|---|---|---|
+| Voyage AI | 3 RPM | Embedding calls — one per message |
+| Groq Llama 3.3 70B | 1K RPD / 12K TPM | LLM generation |
+
+With hybrid retrieval the context is ~350–500 tokens (5 chunks) vs the previous 1,100-token full-resume stopgap — roughly 2× more TPM headroom per request.
+
+**Planned**: in-memory embedding cache (5-min TTL) to absorb burst 429s without hitting the API.
 
 ---
 
 ## LLM Switching
 
-Switch providers with zero code changes via the `LLM_PROVIDER` env var:
+Switch providers with zero code changes:
 
 ```bash
 LLM_PROVIDER=groq   make run   # Groq Llama 3.3 70B (default)
-LLM_PROVIDER=gemini make run   # Gemini (fallback)
+LLM_PROVIDER=gemini make run   # Gemini 1.5 Flash (fallback)
 ```
-
-The `LLM` interface in `internal/llm/llm.go` makes adding new providers straightforward.
 
 ---
 
@@ -157,7 +172,8 @@ Required env vars in the Render dashboard:
 | `VOYAGE_API_KEY` | Voyage AI API key |
 | `GROQ_API_KEY` | Groq API key |
 | `GEMINI_API_KEY` | Google AI Studio key (optional fallback) |
-| `ALLOWED_ORIGINS` | Your portfolio website URL (CORS) |
+| `ALLOWED_ORIGINS` | Portfolio website URL for CORS |
+| `SIMILARITY_THRESHOLD` | Topic filter threshold (default: `0.80`) |
 
 Push to `main` → auto-deploy. Health check at `GET /health`.
 
@@ -166,4 +182,4 @@ Push to `main` → auto-deploy. Health check at `GET /health`.
 ## Related Repos
 
 - [`portfolio-website`](https://github.com/AG-AGENT47) — frontend that embeds this chatbot
-- [`portfolio-store`](https://github.com/AG-AGENT47) — Neon DB + knowledge base ingestion scripts
+- [`portfolio-store`](https://github.com/AG-AGENT47) — Neon DB schema + knowledge base ingestion

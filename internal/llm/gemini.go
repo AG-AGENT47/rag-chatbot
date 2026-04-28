@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	geminiModel   = "gemini-2.5-flash"
+	geminiModel   = "gemini-1.5-flash-latest"
 	geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
 )
 
@@ -31,7 +31,7 @@ func newGemini(apiKey string) (LLM, error) {
 	}, nil
 }
 
-func (g *geminiClient) Name() string { return "gemini-2.5-flash" }
+func (g *geminiClient) Name() string { return "gemini-1.5-flash-latest" }
 
 // --- request types ---
 

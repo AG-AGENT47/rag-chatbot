@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 const (
@@ -24,7 +25,7 @@ type Embedder struct {
 func NewEmbedder(apiKey string) *Embedder {
 	return &Embedder{
 		apiKey: apiKey,
-		client: &http.Client{},
+		client: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 

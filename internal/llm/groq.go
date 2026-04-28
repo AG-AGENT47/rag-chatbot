@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
@@ -27,7 +28,7 @@ func newGroq(apiKey string) (LLM, error) {
 	}
 	return &groqClient{
 		apiKey: apiKey,
-		client: &http.Client{},
+		client: &http.Client{Timeout: 30 * time.Second},
 	}, nil
 }
 

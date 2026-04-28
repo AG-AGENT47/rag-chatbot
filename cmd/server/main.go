@@ -31,7 +31,7 @@ func main() {
 	groqAPIKey := os.Getenv("GROQ_API_KEY")
 	allowedOrigins := envOr("ALLOWED_ORIGINS", "http://localhost:3000")
 	port := envOr("PORT", "8080")
-	threshold := parseFloatOr(envOr("SIMILARITY_THRESHOLD", "0.75"), 0.75)
+	threshold := parseFloatOr(envOr("SIMILARITY_THRESHOLD", "0.80"), 0.80)
 
 	// --- Database ---
 	pool, err := db.NewPool(ctx, databaseURL)

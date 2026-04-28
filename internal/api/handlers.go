@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -100,9 +101,13 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	result, err := h.pipeline.Run(ctx, req.Message, history)
 	if err != nil {
 		log.Printf("pipeline error: %v", err)
-		// Set SSE headers before writing — can't use http.Error after this point.
 		setSSSEHeaders(w)
-		writeSSEAndFlush(w, flusher, ssePayload{Error: "Service temporarily unavailable. Please try again."})
+		var rateLimitErr *rag.ErrRateLimit
+		if errors.As(err, &rateLimitErr) {
+			writeSSEAndFlush(w, flusher, ssePayload{RateLimited: true, Error: "rate_limited"})
+		} else {
+			writeSSEAndFlush(w, flusher, ssePayload{Error: "Service temporarily unavailable. Please try again."})
+		}
 		return
 	}
 

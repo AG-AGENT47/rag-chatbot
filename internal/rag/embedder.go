@@ -15,6 +15,13 @@ const (
 	voyageModel = "voyage-3-lite"
 )
 
+// ErrRateLimit is returned when the embedding API responds with HTTP 429.
+// Callers can detect this with errors.As to surface a user-friendly message
+// instead of a generic service error.
+type ErrRateLimit struct{ msg string }
+
+func (e *ErrRateLimit) Error() string { return "embedder: rate limited: " + e.msg }
+
 // Embedder embeds query text using Voyage AI.
 type Embedder struct {
 	apiKey string
@@ -73,6 +80,9 @@ func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("embedder: read response: %w", err)
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, &ErrRateLimit{msg: string(respBody)}
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("embedder: status %d: %s", resp.StatusCode, string(respBody))

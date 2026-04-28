@@ -23,8 +23,9 @@ type MetricsResponse struct {
 
 // ssePayload is the JSON payload of each SSE data event.
 type ssePayload struct {
-	Token string `json:"token,omitempty"`
-	Done  bool   `json:"done,omitempty"`
-	ID    string `json:"id,omitempty"`
-	Error string `json:"error,omitempty"`
+	Token       string `json:"token,omitempty"`
+	Done        bool   `json:"done,omitempty"`
+	ID          string `json:"id,omitempty"`
+	Error       string `json:"error,omitempty"`
+	RateLimited bool   `json:"rate_limited,omitempty"`
 }

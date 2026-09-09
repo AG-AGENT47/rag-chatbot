@@ -25,13 +25,14 @@ func main() {
 
 	// --- Config ---
 	databaseURL := mustEnv("NEON_DATABASE_URL")
-	voyageAPIKey := mustEnv("VOYAGE_API_KEY")
 	llmProvider := envOr("LLM_PROVIDER", "groq")
+	embedProvider := envOr("EMBED_PROVIDER", "gemini")
 	geminiAPIKey := os.Getenv("GEMINI_API_KEY")
 	groqAPIKey := os.Getenv("GROQ_API_KEY")
+	voyageAPIKey := os.Getenv("VOYAGE_API_KEY") // only needed when EMBED_PROVIDER=voyage
 	allowedOrigins := envOr("ALLOWED_ORIGINS", "http://localhost:3000")
 	port := envOr("PORT", "8080")
-	threshold := parseFloatOr(envOr("SIMILARITY_THRESHOLD", "0.80"), 0.80)
+	threshold := parseFloatOr(envOr("SIMILARITY_THRESHOLD", "0.75"), 0.75)
 
 	// --- Database ---
 	pool, err := db.NewPool(ctx, databaseURL)
@@ -55,7 +56,16 @@ func main() {
 	log.Printf("LLM provider: %s", l.Name())
 
 	// --- RAG Pipeline ---
-	embedder := rag.NewEmbedder(voyageAPIKey)
+	embedder, err := rag.NewEmbedder(rag.EmbedConfig{
+		Provider:     embedProvider,
+		GeminiAPIKey: geminiAPIKey,
+		VoyageAPIKey: voyageAPIKey,
+	})
+	if err != nil {
+		log.Fatalf("embedder: %v", err)
+	}
+	log.Printf("Embed provider: %s", embedder.Name())
+
 	retriever := rag.NewRetriever(pool)
 	pipeline := rag.NewPipeline(embedder, retriever, l, threshold)
 

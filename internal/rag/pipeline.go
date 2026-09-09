@@ -38,14 +38,14 @@ type Result struct {
 
 // Pipeline orchestrates: embed → retrieve → topic filter → LLM stream.
 type Pipeline struct {
-	embedder            *Embedder
+	embedder            Embedder
 	retriever           *Retriever
 	llm                 llm.LLM
 	similarityThreshold float64
 }
 
 // NewPipeline creates a Pipeline with the given components.
-func NewPipeline(embedder *Embedder, retriever *Retriever, l llm.LLM, threshold float64) *Pipeline {
+func NewPipeline(embedder Embedder, retriever *Retriever, l llm.LLM, threshold float64) *Pipeline {
 	return &Pipeline{
 		embedder:            embedder,
 		retriever:           retriever,

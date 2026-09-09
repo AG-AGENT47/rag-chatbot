@@ -8,13 +8,16 @@ services:
     envVars:
       - key: NEON_DATABASE_URL
         sync: false
-      - key: VOYAGE_API_KEY
+      - key: EMBED_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
         sync: false
       - key: LLM_PROVIDER
         value: groq
-      - key: GEMINI_API_KEY
-        sync: false
       - key: GROQ_API_KEY
+        sync: false
+      # Only needed for rollback (EMBED_PROVIDER=voyage / LLM_PROVIDER=gemini).
+      - key: VOYAGE_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false

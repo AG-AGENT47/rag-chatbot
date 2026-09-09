@@ -7,7 +7,7 @@ import (
 
 // Message is a single turn in the conversation history.
 type Message struct {
-	Role    string `json:"role"`    // "user" | "assistant"
+	Role    string `json:"role"` // "user" | "assistant"
 	Content string `json:"content"`
 }
 

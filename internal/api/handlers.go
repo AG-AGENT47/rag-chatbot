@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -118,8 +119,9 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	if result.IsFiltered {
 		writeSSEAndFlush(w, flusher, ssePayload{Token: result.FilterMsg})
 		writeSSEAndFlush(w, flusher, ssePayload{Done: true})
-		latencyMs := time.Since(start).Milliseconds()
-		if _, err := h.db.InsertInteraction(ctx, req.Message, result.FilterMsg, latencyMs); err != nil {
+		lctx, cancel := logCtx(ctx)
+		defer cancel()
+		if _, err := h.db.InsertInteraction(lctx, req.Message, result.FilterMsg, time.Since(start).Milliseconds()); err != nil {
 			log.Printf("log filtered interaction: %v", err)
 		}
 		return
@@ -137,11 +139,15 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		writeSSEAndFlush(w, flusher, ssePayload{Token: event.Text})
 	}
 
-	// All tokens received — log the interaction synchronously (ctx is still valid).
+	// All tokens received — log the interaction. Use a detached context: if the
+	// client disconnected mid-stream, r.Context() is already canceled and the
+	// insert (and the rating ID it returns) would be lost.
 	answer := sb.String()
 	latencyMs := time.Since(start).Milliseconds()
 
-	interactionID, err := h.db.InsertInteraction(ctx, req.Message, answer, latencyMs)
+	lctx, cancel := logCtx(ctx)
+	defer cancel()
+	interactionID, err := h.db.InsertInteraction(lctx, req.Message, answer, latencyMs)
 	if err != nil {
 		log.Printf("log interaction: %v", err)
 		// Don't fail the response — just send Done without an ID.
@@ -149,6 +155,13 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 
 	// Send Done event with the interaction ID so the frontend can submit ratings.
 	writeSSEAndFlush(w, flusher, ssePayload{Done: true, ID: interactionID})
+}
+
+// logCtx returns a context detached from the request lifecycle (SSE close cancels
+// r.Context()) but still time-bounded, so writing the interaction row survives a
+// client disconnecting mid-stream.
+func logCtx(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
 }
 
 // --- SSE helpers ---

@@ -112,27 +112,98 @@ make run
 
 ---
 
-## Endpoints
+## API Contract
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/chat` | SSE stream — body: `{"message": "...", "history": []}` |
-| `POST` | `/rating` | Submit rating — body: `{"interaction_id": "...", "rating": 1\|5}` |
-| `GET` | `/metrics` | `{"total_conversations", "avg_rating", "recent_questions"}` |
-| `GET` | `/health` | `{"status":"ok"}` — Render health check |
+### `POST /chat` — SSE streaming
 
-### SSE event types (`POST /chat`)
-
-Each event is `data: <json>\n\n`. Possible shapes:
+**Request body** (`Content-Type: application/json`):
 
 ```json
-{"token": "..."}                          // streaming token
-{"done": true, "id": "<interaction-id>"}  // stream complete, use id for /rating
-{"error": "..."}                          // infrastructure failure
-{"error": "rate_limited", "rate_limited": true}  // Voyage AI 429 — retry after ~20s
+{
+  "message": "how is he with uber",
+  "history": [
+    {"role": "user",      "content": "tell me about his projects"},
+    {"role": "assistant", "content": "Avyakt built ..."}
+  ]
+}
 ```
 
-Check `event.rate_limited === true` on the client to show a retry prompt instead of a generic error.
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `message` | `string` | yes | The current user message. **NOT** a `messages` array — this is a flat string. |
+| `history` | `[]{"role", "content"}` | no | Prior turns. Omit or send `[]` for a fresh conversation. Max 5 turns kept (older are truncated). |
+
+**Response**: `text/event-stream`. Each line is `data: <json>\n\n`.
+
+```json
+{"token": "Avyakt has a strong..."}
+{"token": " connection with Uber"}
+{"done": true, "id": "d883c97c-073b-4bfe-9b41-5650a022a566"}
+```
+
+All possible event shapes:
+
+| Shape | When |
+|---|---|
+| `{"token": "..."}` | Streaming token from LLM |
+| `{"done": true, "id": "<uuid>"}` | Stream complete — save `id` to submit a rating |
+| `{"error": "..."}` | Infrastructure failure (embed/retrieve/LLM) |
+| `{"error": "rate_limited", "rate_limited": true}` | Voyage AI 429 — retry after ~20 s |
+
+Check `event.rate_limited === true` to show a retry prompt instead of a generic error.
+
+---
+
+### `POST /rating`
+
+```json
+{"interaction_id": "<uuid from done event>", "rating": 5}
+```
+
+`rating`: `1` = thumbs down, `5` = thumbs up. Returns `204 No Content`.
+
+---
+
+### `GET /metrics`
+
+```json
+{"total_conversations": 42, "avg_rating": 4.2, "recent_questions": ["..."]}
+```
+
+---
+
+### `GET /health`
+
+```json
+{"status": "ok"}
+```
+
+---
+
+### curl examples
+
+```bash
+# Health check
+curl https://rag-chatbot-qge9.onrender.com/health
+
+# Chat (fresh conversation)
+curl -N -X POST https://rag-chatbot-qge9.onrender.com/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "how is he with uber", "history": []}'
+
+# Chat (with history)
+curl -N -X POST https://rag-chatbot-qge9.onrender.com/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "what tech did he use there",
+    "history": [{"role":"user","content":"how is he with uber"},{"role":"assistant","content":"Avyakt has two Uber internships..."}]
+  }'
+
+# Submit rating
+curl -X POST https://rag-chatbot-qge9.onrender.com/rating \
+  -H "Content-Type: application/json" \
+  -d '{"interaction_id": "<id from done event>", "rating": 5}'
+```
 
 ---
 

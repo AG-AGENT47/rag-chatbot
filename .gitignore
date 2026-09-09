@@ -5,7 +5,8 @@
 # Internal dev notes — keep locally for Claude Code, not for public repo
 CLAUDE.md
 
-# Resume source file (content lives in internal/rag/resume.go)
+# Local scratch data (resume text dumps, ad-hoc fixtures). Retrieval content
+# lives in the Neon knowledge_base table, seeded from portfolio-store.
 data/
 
 # Build output

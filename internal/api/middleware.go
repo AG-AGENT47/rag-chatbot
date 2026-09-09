@@ -85,6 +85,8 @@ func RateLimitMiddleware() func(http.Handler) http.Handler {
 
 // CORSMiddleware returns a chi middleware that restricts origins to the allowlist.
 // allowedOrigins is a comma-separated list (e.g. "https://example.com,http://localhost:3000").
+// Any "https://<sub>.vercel.app" origin is also allowed, so the production site
+// and every Vercel preview deploy work without re-listing per-deploy URLs.
 func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 	origins := make(map[string]bool)
 	for _, o := range strings.Split(allowedOrigins, ",") {
@@ -97,7 +99,7 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
-			if origins[origin] {
+			if origins[origin] || isVercelOrigin(origin) {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -110,6 +112,22 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// isVercelOrigin reports whether origin is "https://<host>.vercel.app" with no
+// path — i.e. a Vercel production or preview deployment of this site.
+func isVercelOrigin(origin string) bool {
+	const prefix = "https://"
+	const suffix = ".vercel.app"
+	if !strings.HasPrefix(origin, prefix) || !strings.HasSuffix(origin, suffix) {
+		return false
+	}
+	host := origin[len(prefix):]
+	// Reject anything with a path, port, or embedded slash — host only.
+	if strings.ContainsAny(host, "/:") {
+		return false
+	}
+	return len(host) > len(suffix) // there is a non-empty subdomain label
 }
 
 // --- Helpers ---

@@ -12,27 +12,35 @@ import (
 	"time"
 )
 
+// groqDefaultModel: Groq rotates its catalogue and drops models without notice
+// (llama-3.3-70b-versatile 404'd here). Override with GROQ_MODEL; check the live
+// list at GET https://api.groq.com/openai/v1/models.
 const (
-	groqModel = "llama-3.3-70b-versatile"
-	groqURL   = "https://api.groq.com/openai/v1/chat/completions"
+	groqDefaultModel = "openai/gpt-oss-120b"
+	groqURL          = "https://api.groq.com/openai/v1/chat/completions"
 )
 
 type groqClient struct {
 	apiKey string
+	model  string
 	client *http.Client
 }
 
-func newGroq(apiKey string) (LLM, error) {
+func newGroq(apiKey, model string) (LLM, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("GROQ_API_KEY is required for groq provider")
 	}
+	if model == "" {
+		model = groqDefaultModel
+	}
 	return &groqClient{
 		apiKey: apiKey,
+		model:  model,
 		client: &http.Client{Timeout: 30 * time.Second},
 	}, nil
 }
 
-func (g *groqClient) Name() string { return "groq-llama-3.3-70b" }
+func (g *groqClient) Name() string { return "groq/" + g.model }
 
 // --- request types ---
 
@@ -76,7 +84,7 @@ func (g *groqClient) Stream(
 	messages = append(messages, groqMessage{Role: "user", Content: userMsg})
 
 	reqBody := groqRequest{
-		Model:    groqModel,
+		Model:    g.model,
 		Messages: messages,
 		Stream:   true,
 	}

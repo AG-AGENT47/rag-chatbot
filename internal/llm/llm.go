@@ -31,6 +31,7 @@ type Config struct {
 	Provider     string
 	GeminiAPIKey string
 	GroqAPIKey   string
+	GroqModel    string // optional; defaults to groqDefaultModel
 }
 
 // New returns the LLM implementation for the configured provider.
@@ -39,7 +40,7 @@ func New(cfg Config) (LLM, error) {
 	case "gemini":
 		return newGemini(cfg.GeminiAPIKey)
 	case "groq":
-		return newGroq(cfg.GroqAPIKey)
+		return newGroq(cfg.GroqAPIKey, cfg.GroqModel)
 	default:
 		return nil, fmt.Errorf("unknown LLM provider: %q", cfg.Provider)
 	}

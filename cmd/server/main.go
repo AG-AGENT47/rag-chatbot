@@ -49,6 +49,7 @@ func main() {
 		Provider:     llmProvider,
 		GeminiAPIKey: geminiAPIKey,
 		GroqAPIKey:   groqAPIKey,
+		GroqModel:    os.Getenv("GROQ_MODEL"),
 	})
 	if err != nil {
 		log.Fatalf("llm: %v", err)
